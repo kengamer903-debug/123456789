@@ -471,7 +471,12 @@ const App: React.FC = () => {
 
     // 1. Try Audio File first if available
     if (effectiveAudioFile) {
-        const audio = new Audio();
+        // Use the persistent audio ref if available, otherwise create new (fallback)
+        let audio = voiceAudioRef.current;
+        if (!audio) {
+             audio = new Audio();
+             voiceAudioRef.current = audio;
+        }
         
         // Construct absolute URL using BASE_URL to ensure it works on Vercel (root or subpath)
         const baseUrl = import.meta.env.BASE_URL || '/';
@@ -484,11 +489,12 @@ const App: React.FC = () => {
             
         console.log("Attempting to play audio from:", audioUrl); // Debug log
 
+        // Reset and load new source
+        audio.pause();
+        audio.currentTime = 0;
         audio.src = audioUrl;
-        audio.preload = 'auto';
-        audio.loop = false; // Explicitly disable looping
+        audio.loop = false; 
         
-        voiceAudioRef.current = audio;
         let hasError = false;
 
         const handleError = (e: any) => {
@@ -496,10 +502,6 @@ const App: React.FC = () => {
              hasError = true;
              console.warn("Audio playback failed (source not found or decode error).", e);
              
-             // Ensure this audio instance is stopped if it's the current one
-             if (voiceAudioRef.current === audio) {
-                 voiceAudioRef.current = null;
-             }
              if (subtitleIntervalRef.current) clearInterval(subtitleIntervalRef.current);
              
              // Only fallback to TTS if NOT Thai
@@ -964,7 +966,15 @@ const App: React.FC = () => {
               {['th', 'en', 'zh'].map((lang) => (
                 <button 
                   key={lang}
-                  onClick={() => handleLanguageSelect(lang as Language)}
+                  onClick={() => {
+                      // UNLOCK AUDIO CONTEXT ON FIRST INTERACTION
+                      if (voiceAudioRef.current) {
+                          voiceAudioRef.current.src = ''; 
+                          voiceAudioRef.current.load();
+                          voiceAudioRef.current.play().catch(() => {}); // Silent play to unlock
+                      }
+                      handleLanguageSelect(lang as Language);
+                  }}
                   className="group flex items-center justify-between p-4 border border-slate-200 hover:border-orange-500 hover:bg-orange-50 transition-all rounded-sm"
                 >
                   <div className="flex items-center gap-4">
@@ -978,6 +988,9 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* PERSISTENT AUDIO ELEMENT */}
+      <audio ref={voiceAudioRef} className="hidden" preload="auto" />
 
       {/* LEFT: VISUAL STAGE */}
       <main className="flex-1 p-4 flex flex-col h-[60vh] md:h-screen transition-opacity duration-500" style={{ opacity: (showLanguageModal || showTeamModal) ? 0.3 : 1 }}>
