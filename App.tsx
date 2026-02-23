@@ -473,13 +473,20 @@ const App: React.FC = () => {
     if (effectiveAudioFile) {
         const audio = new Audio();
         
-        // Construct absolute URL to avoid any relative path issues on Vercel
+        // Construct absolute URL using BASE_URL to ensure it works on Vercel (root or subpath)
+        const baseUrl = import.meta.env.BASE_URL || '/';
+        // Remove leading slash from file path if present to avoid double slashes when joining
+        const cleanPath = effectiveAudioFile.startsWith('/') ? effectiveAudioFile.slice(1) : effectiveAudioFile;
+        
         const audioUrl = effectiveAudioFile.startsWith('http') || effectiveAudioFile.startsWith('blob') 
             ? effectiveAudioFile 
-            : `${window.location.origin}${effectiveAudioFile.startsWith('/') ? '' : '/'}${effectiveAudioFile}`;
+            : `${window.location.origin}${baseUrl}${cleanPath}`;
             
+        console.log("Attempting to play audio from:", audioUrl); // Debug log
+
         audio.src = audioUrl;
         audio.preload = 'auto';
+        audio.loop = false; // Explicitly disable looping
         
         voiceAudioRef.current = audio;
         let hasError = false;
