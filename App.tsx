@@ -478,11 +478,16 @@ const App: React.FC = () => {
              voiceAudioRef.current = audio;
         }
         
-        // Since we are using Vite imports (assets), effectiveAudioFile is already a resolved URL.
-        // It works for both imported assets and Blob URLs from user uploads.
-        const audioUrl = effectiveAudioFile;
-
-        console.log("Playing audio:", audioUrl);
+        // Construct absolute URL using BASE_URL to ensure it works on Vercel (root or subpath)
+        const baseUrl = import.meta.env.BASE_URL || '/';
+        // Remove leading slash from file path if present to avoid double slashes when joining
+        const cleanPath = effectiveAudioFile.startsWith('/') ? effectiveAudioFile.slice(1) : effectiveAudioFile;
+        
+        const audioUrl = effectiveAudioFile.startsWith('http') || effectiveAudioFile.startsWith('blob') 
+            ? effectiveAudioFile 
+            : `${window.location.origin}${baseUrl}${cleanPath}`;
+            
+        console.log("Attempting to play audio from:", audioUrl); // Debug log
 
         // Reset and load new source
         audio.pause();
