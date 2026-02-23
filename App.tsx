@@ -472,13 +472,14 @@ const App: React.FC = () => {
     // 1. Try Audio File first if available
     if (effectiveAudioFile) {
         const audio = new Audio();
-        // Google Drive links often require crossOrigin to be set to anonymous to play correctly in some contexts,
-        // or NOT set at all depending on the redirect.
-        // However, the most robust way for direct links is often just setting src.
-        // But if we want to avoid CORS errors that stop playback, we might need to handle it.
-        // Let's try setting it to anonymous.
-        // audio.crossOrigin = "anonymous"; // REMOVED: This can cause issues with local files or simple hosting if headers aren't perfect.
-        audio.src = effectiveAudioFile;
+        
+        // Construct absolute URL to avoid any relative path issues on Vercel
+        const audioUrl = effectiveAudioFile.startsWith('http') || effectiveAudioFile.startsWith('blob') 
+            ? effectiveAudioFile 
+            : `${window.location.origin}${effectiveAudioFile.startsWith('/') ? '' : '/'}${effectiveAudioFile}`;
+            
+        audio.src = audioUrl;
+        audio.preload = 'auto';
         
         voiceAudioRef.current = audio;
         let hasError = false;
@@ -690,11 +691,17 @@ const App: React.FC = () => {
         if (currentSceneData.id === 5 && !isAudioEnabled) delay = 22000;
 
         timer = setTimeout(() => {
-          // If it is the last scene, we don't advance, we just stop playing
-          if (currentSceneIndex >= totalScenes - 1) {
-             setIsPlaying(false);
-          } else {
-             setCurrentSceneIndex(prev => prev + 1);
+          // Check if we are still playing before advancing
+          if (isPlaying) {
+              if (currentSceneIndex >= totalScenes - 1) {
+                 setIsPlaying(false);
+              } else {
+                 setCurrentSceneIndex(prev => {
+                     // Ensure we don't go out of bounds
+                     const next = prev + 1;
+                     return next < totalScenes ? next : prev;
+                 });
+              }
           }
         }, delay);
       }
