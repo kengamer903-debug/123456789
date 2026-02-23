@@ -478,16 +478,18 @@ const App: React.FC = () => {
              voiceAudioRef.current = audio;
         }
         
-        // Construct absolute URL using BASE_URL to ensure it works on Vercel (root or subpath)
-        const baseUrl = import.meta.env.BASE_URL || '/';
-        // Remove leading slash from file path if present to avoid double slashes when joining
-        const cleanPath = effectiveAudioFile.startsWith('/') ? effectiveAudioFile.slice(1) : effectiveAudioFile;
+        // SIMPLIFIED URL CONSTRUCTION
+        // Just use the path directly. Vercel serves public folder at root.
+        // If effectiveAudioFile is "/audio/scene_1.mp3", just use it.
+        // If it is a full URL (blob/http), use it.
+        let audioUrl = effectiveAudioFile;
         
-        const audioUrl = effectiveAudioFile.startsWith('http') || effectiveAudioFile.startsWith('blob') 
-            ? effectiveAudioFile 
-            : `${window.location.origin}${baseUrl}${cleanPath}`;
-            
-        console.log("Attempting to play audio from:", audioUrl); // Debug log
+        // Ensure leading slash for local files if missing
+        if (!audioUrl.startsWith('http') && !audioUrl.startsWith('blob') && !audioUrl.startsWith('/')) {
+            audioUrl = '/' + audioUrl;
+        }
+
+        console.log("Playing audio:", audioUrl);
 
         // Reset and load new source
         audio.pause();
@@ -500,7 +502,7 @@ const App: React.FC = () => {
         const handleError = (e: any) => {
              if (hasError) return;
              hasError = true;
-             console.warn("Audio playback failed (source not found or decode error).", e);
+             console.warn("Audio error:", e);
              
              if (subtitleIntervalRef.current) clearInterval(subtitleIntervalRef.current);
              
@@ -509,6 +511,7 @@ const App: React.FC = () => {
                 playTTS(text);
              } else {
                 setIsSpeaking(false);
+                // Show a visual error or manual play button could be added here if needed
              }
         };
 
@@ -533,19 +536,15 @@ const App: React.FC = () => {
             }
         };
 
-        // Better Subtitle Sync based on character length
+        // Better Subtitle Sync
         audio.onloadedmetadata = () => {
-             // Calculate effective duration
              let duration = audio.duration;
-             if (effectiveAudioRange) {
-                 duration = effectiveAudioRange[1] - effectiveAudioRange[0];
-             }
+             if (effectiveAudioRange) duration = effectiveAudioRange[1] - effectiveAudioRange[0];
 
              if (isFinite(duration) && duration > 0) {
                  const script = currentContent.script;
                  const totalChars = script.reduce((acc, line) => acc + line.length, 0);
                  
-                 // Clear any existing sync mechanism
                  if (subtitleIntervalRef.current) clearInterval(subtitleIntervalRef.current);
                  
                  const startTime = Date.now();
@@ -557,11 +556,8 @@ const App: React.FC = () => {
                          if (subtitleIntervalRef.current) clearInterval(subtitleIntervalRef.current);
                          return;
                      }
-                     
-                     // Find which line should be active based on proportional length
                      let currentLine = 0;
                      let timeSoFar = 0;
-                     
                      for (let i = 0; i < script.length; i++) {
                          const lineDuration = (script[i].length / totalChars) * durationMs;
                          if (elapsed < timeSoFar + lineDuration) {
@@ -571,18 +567,18 @@ const App: React.FC = () => {
                          timeSoFar += lineDuration;
                      }
                      setCurrentSubtitleIndex(currentLine);
-                 }, 50); // Check every 50ms for smoother updates
+                 }, 50);
              }
         };
 
         const playPromise = audio.play();
         if (playPromise !== undefined) {
             playPromise.catch(e => {
-                // Ignore AbortError (interrupted by pause/stop logic)
-                if (e.name === 'AbortError') return;
-                
-                // Fallback for other errors (like Autoplay policy or 404/NotSupported)
-                console.warn("Audio play() promise rejected:", e);
+                console.warn("Autoplay blocked or failed:", e);
+                // If blocked, we might want to show a "Play" button overlay
+                if (e.name === 'NotAllowedError') {
+                    setIsPlaying(false); // Stop the "playing" state so user can click Play manually
+                }
                 handleError(e);
             });
         }
