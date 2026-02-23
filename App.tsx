@@ -487,7 +487,7 @@ const App: React.FC = () => {
         const handleError = (e: any) => {
              if (hasError) return;
              hasError = true;
-             console.warn("Audio playback failed (source not found or decode error), falling back to TTS.", e);
+             console.warn("Audio playback failed (source not found or decode error).", e);
              
              // Ensure this audio instance is stopped if it's the current one
              if (voiceAudioRef.current === audio) {
@@ -495,7 +495,12 @@ const App: React.FC = () => {
              }
              if (subtitleIntervalRef.current) clearInterval(subtitleIntervalRef.current);
              
-             playTTS(text);
+             // Only fallback to TTS if NOT Thai
+             if (language !== 'th') {
+                playTTS(text);
+             } else {
+                setIsSpeaking(false);
+             }
         };
 
         // Set start time if range provided
@@ -576,7 +581,12 @@ const App: React.FC = () => {
     }
 
     // 2. Fallback to TTS
-    playTTS(text);
+    if (language !== 'th') {
+        playTTS(text);
+    } else {
+        // For Thai, if no audio file, do not play TTS
+        setIsSpeaking(false);
+    }
   }, [stopSpeaking, playTTS, scriptRanges, customAudioMap, currentSceneData.id, language]);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
