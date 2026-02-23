@@ -477,7 +477,7 @@ const App: React.FC = () => {
         // However, the most robust way for direct links is often just setting src.
         // But if we want to avoid CORS errors that stop playback, we might need to handle it.
         // Let's try setting it to anonymous.
-        audio.crossOrigin = "anonymous";
+        // audio.crossOrigin = "anonymous"; // REMOVED: This can cause issues with local files or simple hosting if headers aren't perfect.
         audio.src = effectiveAudioFile;
         
         voiceAudioRef.current = audio;
