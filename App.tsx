@@ -478,16 +478,9 @@ const App: React.FC = () => {
              voiceAudioRef.current = audio;
         }
         
-        // SIMPLIFIED URL CONSTRUCTION
-        // Just use the path directly. Vercel serves public folder at root.
-        // If effectiveAudioFile is "/audio/scene_1.mp3", just use it.
-        // If it is a full URL (blob/http), use it.
-        let audioUrl = effectiveAudioFile;
-        
-        // Ensure leading slash for local files if missing
-        if (!audioUrl.startsWith('http') && !audioUrl.startsWith('blob') && !audioUrl.startsWith('/')) {
-            audioUrl = '/' + audioUrl;
-        }
+        // Since we are using Vite imports (assets), effectiveAudioFile is already a resolved URL.
+        // It works for both imported assets and Blob URLs from user uploads.
+        const audioUrl = effectiveAudioFile;
 
         console.log("Playing audio:", audioUrl);
 
