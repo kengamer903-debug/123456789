@@ -495,8 +495,8 @@ const App: React.FC = () => {
              if (hasError) return;
              hasError = true;
              console.warn("Audio error:", e);
-             setErrorMessage(`Audio Error: ${e.message || 'Check console'}`);
-             setTimeout(() => setErrorMessage(null), 5000);
+             setErrorMessage(`Audio Error: ${e.message || 'Check console'} (URL: ${audioUrl})`);
+             setTimeout(() => setErrorMessage(null), 8000); // Longer timeout to read URL
              
              if (subtitleIntervalRef.current) clearInterval(subtitleIntervalRef.current);
              
@@ -642,6 +642,34 @@ const App: React.FC = () => {
   };
 
   const handleLanguageSelect = (lang: Language) => {
+    // UNLOCK AUDIO FOR iOS/iPad
+    // iOS requires audio context to be resumed/created during a user interaction (tap)
+    const ctx = initAudio();
+    if (ctx.state === 'suspended') {
+        ctx.resume();
+    }
+    // Play a silent buffer to force the audio engine to wake up
+    const buffer = ctx.createBuffer(1, 1, 22050);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(0);
+
+    // Unlock HTML5 Audio element for voiceovers
+    if (!voiceAudioRef.current) {
+        voiceAudioRef.current = new Audio();
+    }
+    // Play a tiny silent sound to "bless" the audio element
+    const silentAudio = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+    voiceAudioRef.current.src = silentAudio;
+    voiceAudioRef.current.play().then(() => {
+        // Immediately pause and reset so it's ready for real content
+        if (voiceAudioRef.current) {
+            voiceAudioRef.current.pause();
+            voiceAudioRef.current.currentTime = 0;
+        }
+    }).catch(e => console.log("Audio unlock skipped (not needed or failed):", e));
+
     setLanguage(lang);
     setShowLanguageModal(false);
     setIsAudioEnabled(true); // Enable audio capability but don't play yet
@@ -659,13 +687,52 @@ const App: React.FC = () => {
     console.log("[App] customAudioMap updated:", customAudioMap);
   }, [customAudioMap]);
 
+  // --- Global Audio Unlock for iOS ---
+  useEffect(() => {
+    const unlockAudio = () => {
+        const ctx = initAudio();
+        if (ctx.state === 'suspended') {
+            ctx.resume();
+        }
+        // Play silent buffer
+        const buffer = ctx.createBuffer(1, 1, 22050);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start(0);
+
+        // Unlock HTML5 Audio
+        if (!voiceAudioRef.current) {
+            voiceAudioRef.current = new Audio();
+        }
+        voiceAudioRef.current.load(); // Force load
+
+        console.log("[Audio] Unlocked on user interaction");
+        
+        // Remove listener after first successful unlock
+        window.removeEventListener('click', unlockAudio);
+        window.removeEventListener('touchstart', unlockAudio);
+        window.removeEventListener('keydown', unlockAudio);
+    };
+
+    window.addEventListener('click', unlockAudio);
+    window.addEventListener('touchstart', unlockAudio);
+    window.addEventListener('keydown', unlockAudio);
+
+    return () => {
+        window.removeEventListener('click', unlockAudio);
+        window.removeEventListener('touchstart', unlockAudio);
+        window.removeEventListener('keydown', unlockAudio);
+    };
+  }, []);
+
   // --- Auto-Play Logic ---
   // Initialize static audio paths for Thai
   useEffect(() => {
     const staticMap: Record<number, string> = {};
     SCENES.forEach(scene => {
-        // Point to the static files in public/audio/ (relative path)
-        staticMap[scene.id] = `audio/scene_${scene.id}.mp3`;
+        // Point to the static files in public/audio/ (absolute path)
+        staticMap[scene.id] = `/audio/scene_${scene.id}.mp3`;
     });
     console.log("[App] Initialized static audio paths:", staticMap);
     setCustomAudioMap(staticMap);

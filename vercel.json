@@ -1,0 +1,15 @@
+{
+  "rewrites": [
+    { "source": "/((?!audio|assets|favicon.ico).*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/audio/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" },
+        { "key": "Content-Type", "value": "audio/mpeg" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" }
+      ]
+    }
+  ]
+}
