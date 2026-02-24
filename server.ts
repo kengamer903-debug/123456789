@@ -38,38 +38,65 @@ app.use(express.json());
 // Upload Route
 app.post('/api/upload/:sceneId', (req, res, next) => {
   const sceneId = req.params.sceneId;
+  console.log(`[Upload] Request for scene ${sceneId}`);
+  
   // Cleanup old files
   try {
-      const existingFiles = fs.readdirSync(UPLOADS_DIR).filter(f => f.startsWith(`scene_${sceneId}.`));
-      existingFiles.forEach(f => fs.unlinkSync(path.join(UPLOADS_DIR, f)));
+      if (fs.existsSync(UPLOADS_DIR)) {
+          const existingFiles = fs.readdirSync(UPLOADS_DIR).filter(f => f.startsWith(`scene_${sceneId}.`));
+          existingFiles.forEach(f => {
+              console.log(`[Upload] Deleting old file: ${f}`);
+              fs.unlinkSync(path.join(UPLOADS_DIR, f));
+          });
+      }
   } catch (e) {
-      console.error("Error cleaning up old files:", e);
+      console.error("[Upload] Error cleaning up old files:", e);
   }
   next();
 }, upload.single('audio'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  res.json({ success: true, url: `/api/audio/${req.params.sceneId}` });
+  if (!req.file) {
+      console.error("[Upload] No file received");
+      return res.status(400).json({ error: 'No file uploaded' });
+  }
+  console.log(`[Upload] Success: ${req.file.filename}`);
+  res.json({ success: true, url: `/api/audio/${req.params.sceneId}`, filename: req.file.filename });
 });
 
 // Get Audio Route
 app.get('/api/audio/:sceneId', (req, res) => {
   const sceneId = req.params.sceneId;
+  console.log(`[GetAudio] Request for scene ${sceneId}`);
   try {
+      if (!fs.existsSync(UPLOADS_DIR)) {
+          console.warn("[GetAudio] Uploads dir not found");
+          return res.status(404).send('Not found');
+      }
+      
       const files = fs.readdirSync(UPLOADS_DIR);
       const foundFile = files.find(f => f.startsWith(`scene_${sceneId}.`));
+      
       if (foundFile) {
-        res.sendFile(path.join(UPLOADS_DIR, foundFile));
+        console.log(`[GetAudio] Serving file: ${foundFile}`);
+        const filePath = path.join(UPLOADS_DIR, foundFile);
+        res.sendFile(filePath);
       } else {
+        console.warn(`[GetAudio] File not found for scene ${sceneId}`);
         res.status(404).send('Not found');
       }
   } catch (e) {
+      console.error("[GetAudio] Error:", e);
       res.status(404).send('Not found');
   }
 });
 
 // List Audios Route
 app.get('/api/audios', (req, res) => {
+  console.log("[ListAudios] Request received");
   try {
+      if (!fs.existsSync(UPLOADS_DIR)) {
+          return res.json({});
+      }
+      
       const files = fs.readdirSync(UPLOADS_DIR);
       const audioMap: Record<string, string> = {};
       files.forEach(file => {
@@ -78,8 +105,10 @@ app.get('/api/audios', (req, res) => {
           audioMap[match[1]] = `/api/audio/${match[1]}`;
         }
       });
+      console.log(`[ListAudios] Found ${Object.keys(audioMap).length} custom audios`);
       res.json(audioMap);
   } catch (e) {
+      console.error("[ListAudios] Error:", e);
       res.json({});
   }
 });

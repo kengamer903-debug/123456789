@@ -688,19 +688,33 @@ const App: React.FC = () => {
     }, 500);
   };
 
+  useEffect(() => {
+    console.log("[App] customAudioMap updated:", customAudioMap);
+  }, [customAudioMap]);
+
   // --- Auto-Play Logic ---
   useEffect(() => {
     // Load saved audios from Server
     const loadSavedAudios = async () => {
+      console.log("[App] Loading saved audios...");
       try {
         const response = await fetch('/api/audios');
         if (response.ok) {
            const loadedMap = await response.json();
-           // Add timestamp to bust cache for initial load if needed, but the server handles it
-           setCustomAudioMap(prev => ({ ...prev, ...loadedMap }));
+           console.log("[App] Loaded audios:", loadedMap);
+           
+           // Add timestamp to bust cache
+           const mapWithTimestamp: Record<string, string> = {};
+           Object.keys(loadedMap).forEach(key => {
+               mapWithTimestamp[key] = `${loadedMap[key]}?t=${Date.now()}`;
+           });
+           
+           setCustomAudioMap(prev => ({ ...prev, ...mapWithTimestamp }));
+        } else {
+           console.warn("[App] Failed to fetch audios:", response.status);
         }
       } catch (e) {
-        console.error("Failed to load audios from server", e);
+        console.error("[App] Failed to load audios from server", e);
       }
     };
     loadSavedAudios();
