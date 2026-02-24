@@ -727,14 +727,15 @@ const App: React.FC = () => {
   }, []);
 
   // --- Auto-Play Logic ---
-  // Initialize static audio paths for Thai
+  // Initialize static audio paths from imported assets
   useEffect(() => {
     const staticMap: Record<number, string> = {};
     SCENES.forEach(scene => {
-        // Point to the static files in public/audio/ (absolute path)
-        staticMap[scene.id] = `/audio/scene_${scene.id}.mp3`;
+        if (scene.th.audio) {
+            staticMap[scene.id] = scene.th.audio;
+        }
     });
-    console.log("[App] Initialized static audio paths:", staticMap);
+    console.log("[App] Initialized static audio paths from assets:", staticMap);
     setCustomAudioMap(staticMap);
   }, []);
 

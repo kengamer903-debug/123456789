@@ -1,5 +1,13 @@
 import { SceneData, QuizQuestion, GuideStep } from './types';
 
+// Import audio files directly so Vite handles them
+import audio1 from './src/assets/audio/scene_1.mp3';
+import audio2 from './src/assets/audio/scene_2.mp3';
+import audio3 from './src/assets/audio/scene_3.mp3';
+import audio4 from './src/assets/audio/scene_4.mp3';
+import audio5 from './src/assets/audio/scene_5.mp3';
+import audio6 from './src/assets/audio/scene_6.mp3';
+
 export const SCENES: SceneData[] = [
   {
     id: 1,
@@ -17,7 +25,7 @@ export const SCENES: SceneData[] = [
         "คือมันอาจจะรับน้ำหนักได้ในช่วงแรกๆ นะ แต่ไม่นานทุกอย่างก็ต้องค่อยๆ ทรุดตัวลงมา",
         "นี่แหละครับคือตัวการสำคัญที่ซ่อนอยู่ใต้ดิน"
       ],
-      audio: "/audio/scene_1.mp3"
+      audio: audio1
     },
     en: {
       title: "The Invisible Problem",
@@ -60,7 +68,7 @@ export const SCENES: SceneData[] = [
         "เราจะฉีดก้อนซีเมนต์ที่มันข้นๆ หนืดๆ เข้าไปดันให้ดินที่อยู่รอบๆ มันแน่นขึ้นมาแทน",
         "มันคล้ายๆ กับการที่เราอัดอากาศเข้าไปในลูกโป่งเพื่อให้มันแข็งแรงและคงรูปนั่นแหละครับ"
       ],
-      audio: "/audio/scene_2.mp3"
+      audio: audio2
     },
     en: {
       title: "The Solution: Compaction Grouting",
@@ -95,7 +103,7 @@ export const SCENES: SceneData[] = [
         "เราจะกดหรือตอกท่อนี้ลงไปในดิน ผ่านชั้นดินหลวมๆ ลงไปจนถึงชั้นดินแข็งด้านล่างสุด",
         "ท่อนี้เปรียบเสมือนเส้นทางหลักที่จะนำพาวัสดุอัดฉีดลงไปเสริมความแข็งแรงให้กับรากฐานครับ"
       ],
-      audio: "/audio/scene_3.mp3"
+      audio: audio3
     },
     en: {
       title: "Step 1: Casing Installation",
@@ -128,7 +136,7 @@ export const SCENES: SceneData[] = [
         "พอออกไปที่ปลายท่อ มันจะขยายตัวเป็นกระเปาะวงกลมเหมือนลูกโป่ง",
         "แรงดันมหาศาลจะดันดินรอบข้างให้แน่นขึ้นทันทีครับ เปรียบเสมือนการวางศิลาฤกษ์ที่แข็งแกร่งที่สุด"
       ],
-      audio: "/audio/scene_4.mp3"
+      audio: audio4
     },
     en: {
       title: "Step 2: Primary Injection",
@@ -165,7 +173,7 @@ export const SCENES: SceneData[] = [
         "แล้วก็อัดฉีดซีเมนต์สร้างกระเปาะใหม่ซ้อนทับก้อนเดิมไปเรื่อยๆ",
         "จนกระทั่งมันกลายเป็นเสาต้นนึงที่แข็งแรงและก็ทนทานมากๆ"
       ],
-      audio: "/audio/scene_5.mp3"
+      audio: audio5
     },
     en: {
       title: "Step 3: Column Formation",
@@ -205,7 +213,7 @@ export const SCENES: SceneData[] = [
         "สุดท้ายแล้วใต้พื้นดินที่เรามองไม่เห็นเนี่ย มันจะเต็มไปด้วยเสาซีเมนต์แข็งแกร่งที่เรียงรายกัน",
         "เหมือนเป็นกองทัพเลย คอยปกป้อง คอยค้ำจุนโครงสร้างของเราไว้อย่างเงียบๆ และทรงพลังมากๆ"
       ],
-      audio: "/audio/scene_6.mp3"
+      audio: audio6
     },
     en: {
       title: "Sustainable Result",
