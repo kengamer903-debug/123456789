@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { Language, AppMode, SimState, SoilType } from './types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { saveAudio, getAudio } from './utils/db';
+// import { saveAudio, getAudio } from './utils/db'; // Removed local DB
 
 // --- UI Translation Dictionary ---
 const UI_TEXT = {
@@ -478,14 +478,8 @@ const App: React.FC = () => {
              voiceAudioRef.current = audio;
         }
         
-        // Construct absolute URL using BASE_URL to ensure it works on Vercel (root or subpath)
-        const baseUrl = import.meta.env.BASE_URL || '/';
-        // Remove leading slash from file path if present to avoid double slashes when joining
-        const cleanPath = effectiveAudioFile.startsWith('/') ? effectiveAudioFile.slice(1) : effectiveAudioFile;
-        
-        const audioUrl = effectiveAudioFile.startsWith('http') || effectiveAudioFile.startsWith('blob') 
-            ? effectiveAudioFile 
-            : `${window.location.origin}${baseUrl}${cleanPath}`;
+        // Since we are using Vite imports (assets), effectiveAudioFile is already a resolved URL.
+        const audioUrl = effectiveAudioFile;
             
         console.log("Attempting to play audio from:", audioUrl); // Debug log
 
@@ -592,17 +586,40 @@ const App: React.FC = () => {
     }
   }, [stopSpeaking, playTTS, scriptRanges, customAudioMap, currentSceneData.id, language]);
 
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      const url = URL.createObjectURL(file);
-      setCustomAudioMap(prev => ({ ...prev, [currentSceneData.id]: url }));
+      // Optimistic update (optional, but let's wait for server confirmation)
+      setIsSaving(true);
+      setSaveMessage("Uploading...");
       
-      // Save to DB
+      const formData = new FormData();
+      formData.append('audio', file);
+
       try {
-        await saveAudio(currentSceneData.id, file);
+        const response = await fetch(`/api/upload/${currentSceneData.id}`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            // Update map with new URL (add timestamp to force refresh)
+            const newUrl = `${data.url}?t=${Date.now()}`;
+            setCustomAudioMap(prev => ({ ...prev, [currentSceneData.id]: newUrl }));
+            setSaveMessage("Uploaded to server!");
+        } else {
+            throw new Error('Upload failed');
+        }
+        setTimeout(() => setSaveMessage(null), 3000);
       } catch (e) {
-        console.error("Failed to save audio", e);
+        console.error("Failed to upload audio", e);
+        setSaveMessage("Upload failed.");
+      } finally {
+        setIsSaving(false);
       }
 
       // Optionally reset input value so same file can be selected again if needed
@@ -673,20 +690,18 @@ const App: React.FC = () => {
 
   // --- Auto-Play Logic ---
   useEffect(() => {
-    // Load saved audios on mount
+    // Load saved audios from Server
     const loadSavedAudios = async () => {
-      const loadedMap: Record<number, string> = {};
-      for (const scene of SCENES) {
-        try {
-          const blob = await getAudio(scene.id);
-          if (blob) {
-            loadedMap[scene.id] = URL.createObjectURL(blob);
-          }
-        } catch (e) {
-          console.error("Failed to load audio for scene", scene.id, e);
+      try {
+        const response = await fetch('/api/audios');
+        if (response.ok) {
+           const loadedMap = await response.json();
+           // Add timestamp to bust cache for initial load if needed, but the server handles it
+           setCustomAudioMap(prev => ({ ...prev, ...loadedMap }));
         }
+      } catch (e) {
+        console.error("Failed to load audios from server", e);
       }
-      setCustomAudioMap(prev => ({ ...prev, ...loadedMap }));
     };
     loadSavedAudios();
   }, []);
@@ -1094,13 +1109,28 @@ const App: React.FC = () => {
                  />
                  {/* Upload Button */}
                  {language === 'th' && (
-                    <button 
-                      onClick={() => fileInputRef.current?.click()} 
-                      className={`p-2 rounded-sm border shadow-sm ${customAudioMap[currentSceneData.id] ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}
-                      title="Upload Custom Audio for this Scene"
-                    >
-                      <Upload className="w-4 h-4" />
-                    </button>
+                    <div className="relative flex items-center">
+                        <button 
+                          onClick={() => fileInputRef.current?.click()} 
+                          className={`p-2 rounded-sm border shadow-sm ${customAudioMap[currentSceneData.id] ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}
+                          title="Upload Custom Audio for this Scene"
+                          disabled={isSaving}
+                        >
+                          {isSaving ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <Upload className="w-4 h-4" />}
+                        </button>
+                        <AnimatePresence>
+                            {saveMessage && (
+                                <motion.div 
+                                    initial={{ opacity: 0, y: -5 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0 }}
+                                    className="absolute top-full mt-2 right-0 bg-slate-800 text-white text-[10px] px-2 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none"
+                                >
+                                    {saveMessage}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
                  )}
                  <button id="btn-language" onClick={() => setShowLanguageModal(true)} className="p-2 rounded-sm border border-slate-300 bg-white text-slate-600 hover:border-orange-500 hover:text-orange-600 shadow-sm"><Globe className="w-4 h-4" /></button>
                  <button onClick={togglePlay} className={`p-2 rounded-sm border shadow-sm ${isPlaying ? 'bg-orange-600 text-white border-orange-700' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}>{isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}</button>
