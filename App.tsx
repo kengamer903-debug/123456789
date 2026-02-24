@@ -495,6 +495,8 @@ const App: React.FC = () => {
              if (hasError) return;
              hasError = true;
              console.warn("Audio error:", e);
+             setErrorMessage(`Audio Error: ${e.message || 'Check console'}`);
+             setTimeout(() => setErrorMessage(null), 5000);
              
              if (subtitleIntervalRef.current) clearInterval(subtitleIntervalRef.current);
              
@@ -588,6 +590,7 @@ const App: React.FC = () => {
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // File upload removed for static deployment
 
@@ -657,8 +660,17 @@ const App: React.FC = () => {
   }, [customAudioMap]);
 
   // --- Auto-Play Logic ---
-  // Removed dynamic audio loading as we are now using static files.
-  
+  // Initialize static audio paths for Thai
+  useEffect(() => {
+    const staticMap: Record<number, string> = {};
+    SCENES.forEach(scene => {
+        // Point to the static files in public/audio/ (relative path)
+        staticMap[scene.id] = `audio/scene_${scene.id}.mp3`;
+    });
+    console.log("[App] Initialized static audio paths:", staticMap);
+    setCustomAudioMap(staticMap);
+  }, []);
+
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     // IMPORTANT: Add !showTour check to prevent auto-play during tour
@@ -1056,6 +1068,20 @@ const App: React.FC = () => {
                  <button onClick={togglePlay} className={`p-2 rounded-sm border shadow-sm ${isPlaying ? 'bg-orange-600 text-white border-orange-700' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}>{isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}</button>
                  <button onClick={toggleAudio} className={`p-2 rounded-sm border shadow-sm ${isAudioEnabled ? 'bg-slate-800 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}>{isAudioEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}</button>
               </div>
+              
+              <AnimatePresence>
+                {errorMessage && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed top-20 right-6 bg-red-600 text-white px-4 py-2 rounded shadow-lg z-[200] flex items-center gap-2 font-bold text-sm"
+                    >
+                        <AlertTriangle className="w-4 h-4" />
+                        {errorMessage}
+                    </motion.div>
+                )}
+              </AnimatePresence>
 
               <div className="mb-6">
                 <div className="flex items-center gap-2 text-orange-600 font-bold uppercase tracking-widest text-xs mb-2 font-mono">
