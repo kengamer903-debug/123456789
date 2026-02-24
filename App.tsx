@@ -589,43 +589,7 @@ const App: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      // Optimistic update (optional, but let's wait for server confirmation)
-      setIsSaving(true);
-      setSaveMessage("Uploading...");
-      
-      const formData = new FormData();
-      formData.append('audio', file);
-
-      try {
-        const response = await fetch(`/api/upload/${currentSceneData.id}`, {
-            method: 'POST',
-            body: formData
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            // Update map with new URL (add timestamp to force refresh)
-            const newUrl = `${data.url}?t=${Date.now()}`;
-            setCustomAudioMap(prev => ({ ...prev, [currentSceneData.id]: newUrl }));
-            setSaveMessage("Uploaded to server!");
-        } else {
-            throw new Error('Upload failed');
-        }
-        setTimeout(() => setSaveMessage(null), 3000);
-      } catch (e) {
-        console.error("Failed to upload audio", e);
-        setSaveMessage("Upload failed.");
-      } finally {
-        setIsSaving(false);
-      }
-
-      // Optionally reset input value so same file can be selected again if needed
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
+  // File upload removed for static deployment
 
   const toggleAudio = () => {
     if (!isAudioEnabled) {
@@ -693,33 +657,8 @@ const App: React.FC = () => {
   }, [customAudioMap]);
 
   // --- Auto-Play Logic ---
-  useEffect(() => {
-    // Load saved audios from Server
-    const loadSavedAudios = async () => {
-      console.log("[App] Loading saved audios...");
-      try {
-        const response = await fetch('/api/audios');
-        if (response.ok) {
-           const loadedMap = await response.json();
-           console.log("[App] Loaded audios:", loadedMap);
-           
-           // Add timestamp to bust cache
-           const mapWithTimestamp: Record<string, string> = {};
-           Object.keys(loadedMap).forEach(key => {
-               mapWithTimestamp[key] = `${loadedMap[key]}?t=${Date.now()}`;
-           });
-           
-           setCustomAudioMap(prev => ({ ...prev, ...mapWithTimestamp }));
-        } else {
-           console.warn("[App] Failed to fetch audios:", response.status);
-        }
-      } catch (e) {
-        console.error("[App] Failed to load audios from server", e);
-      }
-    };
-    loadSavedAudios();
-  }, []);
-
+  // Removed dynamic audio loading as we are now using static files.
+  
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     // IMPORTANT: Add !showTour check to prevent auto-play during tour
@@ -1113,39 +1052,6 @@ const App: React.FC = () => {
           {mode === 'STORY' && (
             <>
               <div id="controls-area" className="flex justify-end gap-2 mb-4">
-                 {/* Hidden File Input */}
-                 <input 
-                   type="file" 
-                   ref={fileInputRef} 
-                   className="hidden" 
-                   accept="audio/mp3,audio/wav,audio/mpeg" 
-                   onChange={handleFileUpload} 
-                 />
-                 {/* Upload Button */}
-                 {language === 'th' && (
-                    <div className="relative flex items-center">
-                        <button 
-                          onClick={() => fileInputRef.current?.click()} 
-                          className={`p-2 rounded-sm border shadow-sm ${customAudioMap[currentSceneData.id] ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}
-                          title="Upload Custom Audio for this Scene"
-                          disabled={isSaving}
-                        >
-                          {isSaving ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <Upload className="w-4 h-4" />}
-                        </button>
-                        <AnimatePresence>
-                            {saveMessage && (
-                                <motion.div 
-                                    initial={{ opacity: 0, y: -5 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0 }}
-                                    className="absolute top-full mt-2 right-0 bg-slate-800 text-white text-[10px] px-2 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none"
-                                >
-                                    {saveMessage}
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </div>
-                 )}
                  <button id="btn-language" onClick={() => setShowLanguageModal(true)} className="p-2 rounded-sm border border-slate-300 bg-white text-slate-600 hover:border-orange-500 hover:text-orange-600 shadow-sm"><Globe className="w-4 h-4" /></button>
                  <button onClick={togglePlay} className={`p-2 rounded-sm border shadow-sm ${isPlaying ? 'bg-orange-600 text-white border-orange-700' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}>{isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}</button>
                  <button onClick={toggleAudio} className={`p-2 rounded-sm border shadow-sm ${isAudioEnabled ? 'bg-slate-800 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}>{isAudioEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}</button>
