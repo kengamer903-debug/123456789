@@ -1206,6 +1206,7 @@ const App: React.FC = () => {
               <AnimatePresence>
                 {errorMessage && (
                     <motion.div 
+                        key="error-msg"
                         initial={{ opacity: 0, y: -20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0 }}
@@ -1217,6 +1218,7 @@ const App: React.FC = () => {
                 )}
                 {saveMessage && (
                     <motion.div 
+                        key="save-msg"
                         initial={{ opacity: 0, y: -20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0 }}
