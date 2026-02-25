@@ -5,7 +5,7 @@ import {
   ChevronRight, ChevronLeft, Info, PlayCircle, Volume2, VolumeX, RotateCcw, 
   Play, Pause, Captions, Globe, Activity, Beaker, HelpCircle, ArrowDown, 
   RotateCw, Layers, Box, X, MousePointerClick, CheckCircle, Construction, AlertTriangle,
-  TrendingUp, AlertOctagon, Upload
+  TrendingUp, AlertOctagon, Upload, Loader2
 } from 'lucide-react';
 import { Language, AppMode, SimState, SoilType } from './types';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -609,7 +609,11 @@ const App: React.FC = () => {
         body: formData,
       });
       
-      if (!response.ok) throw new Error('Upload failed');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Server upload error:", errorText);
+        throw new Error(`Upload failed: ${errorText}`);
+      }
       
       const result = await response.json();
       
@@ -627,8 +631,9 @@ const App: React.FC = () => {
       }
     } catch (error) {
       console.error("Upload error:", error);
-      setErrorMessage("Failed to upload audio file");
-      setTimeout(() => setErrorMessage(null), 5000);
+      setSaveMessage(null);
+      setErrorMessage(`Failed to upload audio file: ${error instanceof Error ? error.message : String(error)}`);
+      setTimeout(() => setErrorMessage(null), 10000);
     } finally {
       setIsSaving(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -1215,9 +1220,9 @@ const App: React.FC = () => {
                         initial={{ opacity: 0, y: -20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0 }}
-                        className="fixed top-20 right-6 bg-green-600 text-white px-4 py-2 rounded shadow-lg z-[200] flex items-center gap-2 font-bold text-sm"
+                        className={`fixed top-20 right-6 text-white px-4 py-2 rounded shadow-lg z-[200] flex items-center gap-2 font-bold text-sm ${isSaving ? 'bg-blue-600' : 'bg-green-600'}`}
                     >
-                        <CheckCircle className="w-4 h-4" />
+                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                         {saveMessage}
                     </motion.div>
                 )}

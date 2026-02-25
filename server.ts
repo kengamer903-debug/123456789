@@ -52,10 +52,20 @@ app.get('/api/audio-map', (req, res) => {
 });
 
 // API to upload audio for a specific scene
-app.post('/api/upload-audio', upload.single('audio'), (req, res) => {
+app.post('/api/upload-audio', (req, res, next) => {
+  upload.single('audio')(req, res, (err) => {
+    if (err) {
+      console.error("Multer error:", err);
+      return res.status(400).json({ error: 'Multer error', details: err.message });
+    }
+    next();
+  });
+}, (req, res) => {
+  console.log("Upload route hit!", req.body, req.file);
   try {
     const sceneId = req.body.sceneId;
     if (!sceneId || !req.file) {
+      console.error("Missing sceneId or file", { sceneId, file: req.file });
       return res.status(400).json({ error: 'Missing sceneId or file' });
     }
 
@@ -68,7 +78,8 @@ app.post('/api/upload-audio', upload.single('audio'), (req, res) => {
 
     res.json({ success: true, sceneId, audioUrl });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to upload audio' });
+    console.error("Upload error in server:", error);
+    res.status(500).json({ error: 'Failed to upload audio', details: error instanceof Error ? error.message : String(error) });
   }
 });
 
