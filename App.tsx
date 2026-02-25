@@ -592,7 +592,48 @@ const App: React.FC = () => {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // File upload removed for static deployment
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    setIsSaving(true);
+    setSaveMessage("Uploading...");
+    
+    const formData = new FormData();
+    formData.append('audio', file);
+    formData.append('sceneId', currentSceneData.id.toString());
+    
+    try {
+      const response = await fetch('/api/upload-audio', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) throw new Error('Upload failed');
+      
+      const result = await response.json();
+      
+      setCustomAudioMap(prev => ({
+        ...prev,
+        [currentSceneData.id]: result.audioUrl
+      }));
+      
+      setSaveMessage("Upload successful!");
+      setTimeout(() => setSaveMessage(null), 3000);
+      
+      // Auto-play the new audio if in story mode and audio is enabled
+      if (mode === 'STORY' && isAudioEnabled) {
+         speak(fullText, result.audioUrl, currentContent.audioRange);
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      setErrorMessage("Failed to upload audio file");
+      setTimeout(() => setErrorMessage(null), 5000);
+    } finally {
+      setIsSaving(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   const toggleAudio = () => {
     if (!isAudioEnabled) {
@@ -727,16 +768,32 @@ const App: React.FC = () => {
   }, []);
 
   // --- Auto-Play Logic ---
-  // Initialize static audio paths from imported assets
+  // Initialize static audio paths from imported assets and server overrides
   useEffect(() => {
-    const staticMap: Record<number, string> = {};
-    SCENES.forEach(scene => {
-        if (scene.th.audio) {
-            staticMap[scene.id] = scene.th.audio;
+    const loadAudioMap = async () => {
+      const staticMap: Record<number, string> = {};
+      SCENES.forEach(scene => {
+          if (scene.th.audio) {
+              staticMap[scene.id] = scene.th.audio;
+          }
+      });
+      
+      try {
+        const response = await fetch('/api/audio-map');
+        if (response.ok) {
+          const serverMap = await response.json();
+          setCustomAudioMap({ ...staticMap, ...serverMap });
+          console.log("[App] Initialized audio map with server overrides:", { ...staticMap, ...serverMap });
+        } else {
+          setCustomAudioMap(staticMap);
         }
-    });
-    console.log("[App] Initialized static audio paths from assets:", staticMap);
-    setCustomAudioMap(staticMap);
+      } catch (error) {
+        console.warn("Failed to load server audio map, using static assets only.", error);
+        setCustomAudioMap(staticMap);
+      }
+    };
+    
+    loadAudioMap();
   }, []);
 
   useEffect(() => {
@@ -1135,6 +1192,10 @@ const App: React.FC = () => {
                  <button id="btn-language" onClick={() => setShowLanguageModal(true)} className="p-2 rounded-sm border border-slate-300 bg-white text-slate-600 hover:border-orange-500 hover:text-orange-600 shadow-sm"><Globe className="w-4 h-4" /></button>
                  <button onClick={togglePlay} className={`p-2 rounded-sm border shadow-sm ${isPlaying ? 'bg-orange-600 text-white border-orange-700' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}>{isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}</button>
                  <button onClick={toggleAudio} className={`p-2 rounded-sm border shadow-sm ${isAudioEnabled ? 'bg-slate-800 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}>{isAudioEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}</button>
+                 <button onClick={() => fileInputRef.current?.click()} className="p-2 rounded-sm border bg-white text-slate-600 border-slate-300 hover:border-slate-400 shadow-sm" title="Upload Custom Audio">
+                   <Upload className="w-4 h-4" />
+                 </button>
+                 <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="audio/*" className="hidden" />
               </div>
               
               <AnimatePresence>
@@ -1147,6 +1208,17 @@ const App: React.FC = () => {
                     >
                         <AlertTriangle className="w-4 h-4" />
                         {errorMessage}
+                    </motion.div>
+                )}
+                {saveMessage && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed top-20 right-6 bg-green-600 text-white px-4 py-2 rounded shadow-lg z-[200] flex items-center gap-2 font-bold text-sm"
+                    >
+                        <CheckCircle className="w-4 h-4" />
+                        {saveMessage}
                     </motion.div>
                 )}
               </AnimatePresence>
