@@ -7,24 +7,18 @@ import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 
-import { createClient } from '@supabase/supabase-js';
+
 
 // Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
-// Configure Supabase
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-let supabase: any = null;
-
-if (supabaseUrl && supabaseAnonKey) {
-  supabase = createClient(supabaseUrl, supabaseAnonKey);
-} else {
-  console.warn("Supabase environment variables are missing. Supabase functionality will be disabled.");
+let cloudinaryConfigured = false;
+function configureCloudinary() {
+  if (cloudinaryConfigured) return;
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  });
+  cloudinaryConfigured = true;
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -49,32 +43,10 @@ const storage = new CloudinaryStorage({
 });
 const upload = multer({ storage: storage });
 
-// API to get the audio map
-app.get('/api/audio-map', async (req, res) => {
-  if (!supabase) {
-    return res.status(500).json({ error: 'Supabase is not configured' });
-  }
-  try {
-    const { data, error } = await supabase
-      .from('audio_map')
-      .select('sceneId, audioUrl');
-    
-    if (error) throw error;
-
-    const audioMap = data.reduce((acc, item) => {
-      acc[item.sceneId] = item.audioUrl;
-      return acc;
-    }, {} as Record<string, string>);
-
-    res.json(audioMap);
-  } catch (error) {
-    console.error("Error reading audio map from Supabase:", error);
-    res.status(500).json({ error: 'Failed to read audio map' });
-  }
-});
 
 // API to upload audio for a specific scene
 app.post('/api/upload-audio', (req, res, next) => {
+  configureCloudinary();
   upload.single('audio')(req, res, (err) => {
     if (err) {
       console.error("Multer error:", err);
@@ -82,7 +54,7 @@ app.post('/api/upload-audio', (req, res, next) => {
     }
     next();
   });
-}, (req, res) => {
+}, async (req, res) => {
   console.log("Upload route hit!", req.body, req.file);
   try {
     const sceneId = req.body.sceneId;
@@ -93,16 +65,6 @@ app.post('/api/upload-audio', (req, res, next) => {
 
     const audioUrl = (req.file as any).path;
     
-    // Update Supabase
-    if (!supabase) {
-      return res.status(500).json({ error: 'Supabase is not configured' });
-    }
-    const { error } = await supabase
-      .from('audio_map')
-      .upsert({ sceneId, audioUrl });
-    
-    if (error) throw error;
-
     res.json({ success: true, sceneId, audioUrl });
   } catch (error) {
     console.error("Upload error in server:", error);

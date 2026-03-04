@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Language, AppMode, SimState, SoilType } from './types';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getSupabase } from './src/services/supabaseClient';
 // import { saveAudio, getAudio } from './utils/db'; // Removed local DB
 
 // --- UI Translation Dictionary ---
@@ -466,8 +467,12 @@ const App: React.FC = () => {
 
     // Check for custom audio override
     const customAudio = customAudioMap[currentSceneData.id];
+    console.log(`[Audio Debug] Scene ID: ${currentSceneData.id}, Custom Audio: ${customAudio}, Default Audio: ${audioFile}`);
+    
     const effectiveAudioFile = (language === 'th' && customAudio) ? customAudio : audioFile;
     const effectiveAudioRange = (language === 'th' && customAudio) ? undefined : audioRange;
+
+    console.log(`[Audio Debug] Effective Audio File: ${effectiveAudioFile}`);
 
     // 1. Try Audio File first if available
     if (effectiveAudioFile) {
@@ -568,12 +573,14 @@ const App: React.FC = () => {
         const playPromise = audio.play();
         if (playPromise !== undefined) {
             playPromise.catch(e => {
-                console.warn("Autoplay blocked or failed:", e);
-                // If blocked, we might want to show a "Play" button overlay
-                if (e.name === 'NotAllowedError') {
-                    setIsPlaying(false); // Stop the "playing" state so user can click Play manually
+                if (e.name !== 'AbortError') {
+                    console.warn("Autoplay blocked or failed:", e);
+                    // If blocked, we might want to show a "Play" button overlay
+                    if (e.name === 'NotAllowedError') {
+                        setIsPlaying(false); // Stop the "playing" state so user can click Play manually
+                    }
+                    handleError(e);
                 }
-                handleError(e);
             });
         }
         return;
@@ -784,11 +791,21 @@ const App: React.FC = () => {
       });
       
       try {
-        const response = await fetch('/api/audio-map');
-        if (response.ok) {
-          const serverMap = await response.json();
+        const supabase = getSupabase();
+        if (supabase) {
+          const { data, error } = await supabase
+            .from('audio_map')
+            .select('sceneId, audioUrl');
+          
+          if (error) throw error;
+
+          const serverMap = data.reduce((acc: any, item: any) => {
+            acc[item.sceneId] = item.audioUrl;
+            return acc;
+          }, {} as Record<string, string>);
+
           setCustomAudioMap({ ...staticMap, ...serverMap });
-          console.log("[App] Initialized audio map with server overrides:", { ...staticMap, ...serverMap });
+          console.log("[App] Initialized audio map with Supabase:", { ...staticMap, ...serverMap });
         } else {
           setCustomAudioMap(staticMap);
         }
