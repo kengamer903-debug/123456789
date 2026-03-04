@@ -4,6 +4,28 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import multer from 'multer';
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
+
+import { createClient } from '@supabase/supabase-js';
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// Configure Supabase
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+let supabase: any = null;
+
+if (supabaseUrl && supabaseAnonKey) {
+  supabase = createClient(supabaseUrl, supabaseAnonKey);
+} else {
+  console.warn("Supabase environment variables are missing. Supabase functionality will be disabled.");
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,39 +36,39 @@ const app = express();
 // 1. API Routes (Minimal or None for static deployment)
 app.use(express.json());
 
-// Ensure uploads directory exists
-const UPLOADS_DIR = path.join(__dirname, 'uploads');
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-}
+// Serve uploaded files statically (if needed, but we are using Cloudinary now)
+// app.use('/uploads', express.static(UPLOADS_DIR));
 
-// Ensure data.json exists
-const DATA_FILE = path.join(__dirname, 'uploads', 'audio_map.json');
-if (!fs.existsSync(DATA_FILE)) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify({}));
-}
-
-// Serve uploaded files statically
-app.use('/uploads', express.static(UPLOADS_DIR));
-
-// Setup multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, UPLOADS_DIR);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'scene-' + uniqueSuffix + path.extname(file.originalname));
-  }
+// Setup Cloudinary storage for multer
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'audio_uploads',
+    resource_type: 'video', // Cloudinary uses 'video' for audio files
+  } as any,
 });
 const upload = multer({ storage: storage });
 
 // API to get the audio map
-app.get('/api/audio-map', (req, res) => {
+app.get('/api/audio-map', async (req, res) => {
+  if (!supabase) {
+    return res.status(500).json({ error: 'Supabase is not configured' });
+  }
   try {
-    const data = fs.readFileSync(DATA_FILE, 'utf8');
-    res.json(JSON.parse(data));
+    const { data, error } = await supabase
+      .from('audio_map')
+      .select('sceneId, audioUrl');
+    
+    if (error) throw error;
+
+    const audioMap = data.reduce((acc, item) => {
+      acc[item.sceneId] = item.audioUrl;
+      return acc;
+    }, {} as Record<string, string>);
+
+    res.json(audioMap);
   } catch (error) {
+    console.error("Error reading audio map from Supabase:", error);
     res.status(500).json({ error: 'Failed to read audio map' });
   }
 });
@@ -69,12 +91,17 @@ app.post('/api/upload-audio', (req, res, next) => {
       return res.status(400).json({ error: 'Missing sceneId or file' });
     }
 
-    const audioUrl = `/uploads/${req.file.filename}`;
+    const audioUrl = (req.file as any).path;
     
-    // Update data.json
-    const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-    data[sceneId] = audioUrl;
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+    // Update Supabase
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase is not configured' });
+    }
+    const { error } = await supabase
+      .from('audio_map')
+      .upsert({ sceneId, audioUrl });
+    
+    if (error) throw error;
 
     res.json({ success: true, sceneId, audioUrl });
   } catch (error) {
