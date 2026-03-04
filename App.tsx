@@ -1199,11 +1199,8 @@ const App: React.FC = () => {
                  <button onClick={toggleAudio} className={`p-2 rounded-sm border shadow-sm ${isAudioEnabled ? 'bg-slate-800 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}>{isAudioEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}</button>
                  <button 
                     onClick={() => fileInputRef.current?.click()} 
-                    disabled={!currentContent.audio}
                     className={`p-2 rounded-sm border shadow-sm ${
-                        !currentContent.audio 
-                            ? 'bg-transparent border-transparent text-slate-300 cursor-not-allowed' 
-                            : customAudioMap[currentSceneData.id] 
+                        customAudioMap[currentSceneData.id] 
                                 ? 'bg-green-600 text-white border-green-700' 
                                 : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'
                     }`} 
