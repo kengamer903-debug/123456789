@@ -1197,25 +1197,25 @@ const App: React.FC = () => {
                  <button id="btn-language" onClick={() => setShowLanguageModal(true)} className="p-2 rounded-sm border border-slate-300 bg-white text-slate-600 hover:border-orange-500 hover:text-orange-600 shadow-sm"><Globe className="w-4 h-4" /></button>
                  <button onClick={togglePlay} className={`p-2 rounded-sm border shadow-sm ${isPlaying ? 'bg-orange-600 text-white border-orange-700' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}>{isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}</button>
                  <button onClick={toggleAudio} className={`p-2 rounded-sm border shadow-sm ${isAudioEnabled ? 'bg-slate-800 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}>{isAudioEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}</button>
-                 <button onClick={() => fileInputRef.current?.click()} className="p-2 rounded-sm border bg-white text-slate-600 border-slate-300 hover:border-slate-400 shadow-sm" title="Upload Custom Audio">
+                 <button 
+                    onClick={() => fileInputRef.current?.click()} 
+                    disabled={!currentContent.audio}
+                    className={`p-2 rounded-sm border shadow-sm ${
+                        !currentContent.audio 
+                            ? 'bg-transparent border-transparent text-slate-300 cursor-not-allowed' 
+                            : customAudioMap[currentSceneData.id] 
+                                ? 'bg-green-600 text-white border-green-700' 
+                                : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'
+                    }`} 
+                    title="Upload Custom Audio"
+                 >
                    <Upload className="w-4 h-4" />
                  </button>
                  <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="audio/*" className="hidden" />
               </div>
               
               <AnimatePresence>
-                {errorMessage && (
-                    <motion.div 
-                        key="error-msg"
-                        initial={{ opacity: 0, y: -20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed top-20 right-6 bg-red-600 text-white px-4 py-2 rounded shadow-lg z-[200] flex items-center gap-2 font-bold text-sm"
-                    >
-                        <AlertTriangle className="w-4 h-4" />
-                        {errorMessage}
-                    </motion.div>
-                )}
+                {/* Error message removed */}
                 {saveMessage && (
                     <motion.div 
                         key="save-msg"
