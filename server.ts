@@ -3,31 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import multer from 'multer';
-import { v2 as cloudinary } from 'cloudinary';
-import { CloudinaryStorage } from 'multer-storage-cloudinary';
-import { createClient } from '@supabase/supabase-js';
-
-// Configure Cloudinary
-let cloudinaryConfigured = false;
-function configureCloudinary() {
-  if (cloudinaryConfigured) return;
-  cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-  });
-  cloudinaryConfigured = true;
-}
-
-// Configure Supabase
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
-let supabase: any = null;
-if (supabaseUrl && supabaseAnonKey) {
-  supabase = createClient(supabaseUrl, supabaseAnonKey);
-} else {
-  console.warn("Supabase environment variables are missing. Supabase functionality will be disabled.");
-}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,78 +10,96 @@ const __dirname = path.dirname(__filename);
 const PORT = 3000;
 const app = express();
 
-// 1. API Routes (Minimal or None for static deployment)
 app.use(express.json());
 
-// Serve uploaded files statically (if needed, but we are using Cloudinary now)
-// app.use('/uploads', express.static(UPLOADS_DIR));
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
+}
 
-// Setup Cloudinary storage for multer
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'audio_uploads',
-    resource_type: 'video', // Cloudinary uses 'video' for audio files
-  } as any,
-});
-const upload = multer({ storage: storage });
+// Serve uploads directory
+app.use('/uploads', express.static(uploadsDir));
 
-// API to get the audio map
-app.get('/api/audio-map', async (req, res) => {
-  if (!supabase) {
-    return res.status(500).json({ error: 'Supabase is not configured' });
+// Audio map file
+const audioMapFile = path.join(__dirname, 'audio-map.json');
+if (!fs.existsSync(audioMapFile)) {
+  fs.writeFileSync(audioMapFile, JSON.stringify({}));
+}
+
+// Multer config
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadsDir)
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
+    // Keep original extension if possible, else default to .webm or .wav
+    const ext = path.extname(file.originalname) || '';
+    cb(null, 'audio-' + uniqueSuffix + ext)
   }
+})
+const upload = multer({ storage: storage })
+
+// API endpoints
+app.get('/api/audio/map', (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('audio_map')
-      .select('sceneId, audioUrl');
-        
-    if (error) throw error;
-    const audioMap = data.reduce((acc: any, item: any) => {
-      acc[item.sceneId] = item.audioUrl;
-      return acc;
-    }, {} as Record<string, string>);
-    res.json(audioMap);
-  } catch (error) {
-    console.error("Error reading audio map from Supabase:", error);
+    const data = fs.readFileSync(audioMapFile, 'utf8');
+    res.json(JSON.parse(data));
+  } catch (e) {
     res.status(500).json({ error: 'Failed to read audio map' });
   }
 });
 
-// API to upload audio for a specific scene
-app.post('/api/upload-audio', (req, res, next) => {
-  configureCloudinary();
-  upload.single('audio')(req, res, (err) => {
-    if (err) {
-      console.error("Multer error:", err);
-      return res.status(400).json({ error: 'Multer error', details: err.message });
-    }
-    next();
-  });
-}, async (req, res) => {
-  console.log("Upload route hit!", req.body, req.file);
+app.post('/api/audio/upload', upload.single('audio'), (req, res) => {
   try {
     const sceneId = req.body.sceneId;
     if (!sceneId || !req.file) {
-      console.error("Missing sceneId or file", { sceneId, file: req.file });
-      return res.status(400).json({ error: 'Missing sceneId or file' });
+      return res.status(400).json({ error: 'Missing sceneId or audio file' });
     }
+    
+    const audioUrl = `/uploads/${req.file.filename}`;
+    
+    // Update map
+    const data = fs.readFileSync(audioMapFile, 'utf8');
+    const map = JSON.parse(data);
+    
+    // Delete old file if exists
+    if (map[sceneId]) {
+      const oldFilePath = path.join(__dirname, map[sceneId]);
+      if (fs.existsSync(oldFilePath)) {
+        fs.unlinkSync(oldFilePath);
+      }
+    }
+    
+    map[sceneId] = audioUrl;
+    fs.writeFileSync(audioMapFile, JSON.stringify(map, null, 2));
+    
+    res.json({ success: true, audioUrl });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to upload audio' });
+  }
+});
 
-    const audioUrl = (req.file as any).path;
+app.delete('/api/audio/map/:sceneId', (req, res) => {
+  try {
+    const sceneId = req.params.sceneId;
+    const data = fs.readFileSync(audioMapFile, 'utf8');
+    const map = JSON.parse(data);
     
-    // Update Supabase
-    if (supabase) {
-      const { error } = await supabase
-        .from('audio_map')
-        .upsert({ sceneId, audioUrl });
-          
-      if (error) throw error;
+    if (map[sceneId]) {
+      const filePath = path.join(__dirname, map[sceneId]);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+      delete map[sceneId];
+      fs.writeFileSync(audioMapFile, JSON.stringify(map, null, 2));
     }
     
-    res.json({ success: true, sceneId, audioUrl });
-  } catch (error) {
-    console.error("Upload error in server:", error);
-    res.status(500).json({ error: 'Failed to upload audio', details: error instanceof Error ? error.message : String(error) });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to delete audio' });
   }
 });
 

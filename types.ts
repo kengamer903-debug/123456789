@@ -29,6 +29,8 @@ export type AppMode = 'STORY' | 'SIMULATION' | 'QUIZ';
 
 export type SoilType = 'SAND' | 'CLAY';
 
+export type SimPhase = 'DRILL' | 'PUMP' | 'DONE' | 'FAIL';
+
 export type FailState = 'NONE' | 'BLOWOUT' | 'STRUCTURE_DAMAGE';
 
 export interface SimState {
