@@ -220,7 +220,15 @@ const VisualStage: React.FC<VisualStageProps> = ({ currentScene, language, mode,
              <circle cx="8" cy="8" r="1" fill="#94a3b8" opacity="0.3" />
           </pattern>
         </defs>
-        <rect x="0" y="-100" width="800" height={GROUND_LEVEL + 100} fill="url(#skyGradient)" />
+        <motion.g
+          animate={{
+            scale: currentScene === 5 && !isSimulation ? 1.5 : 1,
+            y: currentScene === 5 && !isSimulation ? -150 : 0
+          }}
+          transition={{ duration: 1.5, ease: "easeInOut" }}
+          style={{ transformOrigin: "400px 350px" }}
+        >
+        <rect x="-200" y="-200" width="1200" height={GROUND_LEVEL + 200} fill="url(#skyGradient)" />
 
         {/* BUILDING */}
         <motion.g
@@ -286,8 +294,8 @@ const VisualStage: React.FC<VisualStageProps> = ({ currentScene, language, mode,
         </motion.g>
 
         {/* GROUND LAYER */}
-        <rect x="0" y={GROUND_LEVEL} width="800" height="450" fill={isClay ? "#e7e5e4" : "#f5f5f4"} />
-        <rect x="0" y={GROUND_LEVEL} width="800" height="450" fill="url(#soilPattern)" />
+        <rect x="-200" y={GROUND_LEVEL} width="1200" height="450" fill={isClay ? "#e7e5e4" : "#f5f5f4"} />
+        <rect x="-200" y={GROUND_LEVEL} width="1200" height="450" fill="url(#soilPattern)" />
         
         {/* VOIDS */}
         {soilVoids.map((voidItem) => {
@@ -356,7 +364,7 @@ const VisualStage: React.FC<VisualStageProps> = ({ currentScene, language, mode,
         <line x1="0" y1={GROUND_LEVEL + 280} x2="800" y2={GROUND_LEVEL + 280} stroke="#e7e5e4" strokeWidth="2" strokeDasharray="8 8" />
 
         {/* BEARING STRATUM */}
-        <rect x="0" y={BOTTOM_LEVEL} width="800" height="100" fill="#475569" />
+        <rect x="-200" y={BOTTOM_LEVEL} width="1200" height="100" fill="#475569" />
         <text x="20" y={BOTTOM_LEVEL + 40} fill="#94a3b8" fontSize="16" fontWeight="bold" fontFamily="Sarabun">{labels.bearingStratum}</text>
 
         {/* PARTICLES */}
@@ -624,6 +632,7 @@ const VisualStage: React.FC<VisualStageProps> = ({ currentScene, language, mode,
                 <path d="M490,480 L450,480" stroke="#be123c" strokeWidth="2" markerEnd="url(#arrowRed)" />
             </motion.g>
         )}
+        </motion.g>
 
         <defs>
           <marker id="arrowRed" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">

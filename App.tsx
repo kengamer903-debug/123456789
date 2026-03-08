@@ -5,15 +5,12 @@ import {
   ChevronRight, ChevronLeft, Info, PlayCircle, Volume2, VolumeX, RotateCcw, 
   Play, Pause, Captions, Globe, Activity, Beaker, HelpCircle, ArrowDown, 
   RotateCw, Layers, Box, X, MousePointerClick, CheckCircle, Construction, AlertTriangle,
-  TrendingUp, AlertOctagon, Upload, Loader2, Mic, MicOff, Sparkles, Settings, Code
+  TrendingUp, AlertOctagon, Sparkles
 } from 'lucide-react';
-import { GoogleGenAI, Modality } from "@google/genai";
 import { Language, AppMode, SimState, SoilType } from './types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { saveAudioLocal, getAllAudioLocal, deleteAudioLocal } from './src/utils/db';
 import { 
-  auth, signInWithGoogle, logout, saveAudioMapping, getAudioMappings, uploadAudioToStorage, deleteAudioMapping, isFirebaseConfigured, onAuthChange,
-  saveGlobalAudioMapping, getGlobalAudioMappings, deleteGlobalAudioMapping
+  auth, signInWithGoogle, logout, isFirebaseConfigured, onAuthChange
 } from './src/services/firebase';
 import { User } from 'firebase/auth';
 import { LogIn, LogOut, User as UserIcon } from 'lucide-react';
@@ -261,18 +258,12 @@ const TourGuide: React.FC<TourGuideProps> = ({ stepIndex, language, onNext, onCl
 };
 
 
-// Add your base64 audio strings here to preload them into the app.
-// You can get these strings by clicking "Copy Audio Code" in the Voice Studio.
-const PRELOADED_AUDIO: Record<number, string> = {};
-
 const App: React.FC = () => {
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [isAudioEnabled, setIsAudioEnabled] = useState(false);
-  const [customAudioMap, setCustomAudioMap] = useState<Record<number, string>>({});
   const [user, setUser] = useState<User | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isPublicSync, setIsPublicSync] = useState(true);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [showSubtitles, setShowSubtitles] = useState(true);
   const [currentSubtitleIndex, setCurrentSubtitleIndex] = useState(0);
@@ -482,11 +473,32 @@ const App: React.FC = () => {
   const playTTS = useCallback((text: string) => {
     if (!window.speechSynthesis) return;
     const utterance = new SpeechSynthesisUtterance(text);
-    if (language === 'th') utterance.lang = 'th-TH';
-    else if (language === 'en') utterance.lang = 'en-US';
-    else if (language === 'zh') utterance.lang = 'zh-CN';
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
+    
+    const voices = window.speechSynthesis.getVoices();
+    let selectedVoice = null;
+
+    if (language === 'th') {
+        utterance.lang = 'th-TH';
+        utterance.rate = 0.95; // Slightly slower for natural feel
+        utterance.pitch = 1.0;
+        selectedVoice = voices.find(v => v.lang.includes('th') && (v.name.includes('Google') || v.name.includes('Microsoft')));
+        if (!selectedVoice) selectedVoice = voices.find(v => v.lang.includes('th'));
+    } else if (language === 'en') {
+        utterance.lang = 'en-US';
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        selectedVoice = voices.find(v => v.lang.includes('en') && (v.name.includes('Google') || v.name.includes('Microsoft')));
+    } else if (language === 'zh') {
+        utterance.lang = 'zh-CN';
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        selectedVoice = voices.find(v => v.lang.includes('zh') && (v.name.includes('Google') || v.name.includes('Microsoft')));
+    }
+    
+    if (selectedVoice) {
+        utterance.voice = selectedVoice;
+    }
+
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
     utterance.onerror = () => setIsSpeaking(false);
@@ -511,12 +523,8 @@ const App: React.FC = () => {
     stopSpeaking();
     setCurrentSubtitleIndex(0);
 
-    // Check for custom audio override
-    const customAudio = customAudioMap[currentSceneData.id];
-    console.log(`[Audio Debug] Scene ID: ${currentSceneData.id}, Custom Audio: ${customAudio}, Default Audio: ${audioFile}`);
-    
-    const effectiveAudioFile = (language === 'th' && customAudio) ? customAudio : audioFile;
-    const effectiveAudioRange = (language === 'th' && customAudio) ? undefined : audioRange;
+    const effectiveAudioFile = audioFile;
+    const effectiveAudioRange = audioRange;
 
     console.log(`[Audio Debug] Effective Audio File: ${effectiveAudioFile}`);
 
@@ -551,13 +559,8 @@ const App: React.FC = () => {
              
              if (subtitleIntervalRef.current) clearInterval(subtitleIntervalRef.current);
              
-             // Only fallback to TTS if NOT Thai
-             if (language !== 'th') {
-                playTTS(text);
-             } else {
-                setIsSpeaking(false);
-                // Show a visual error or manual play button could be added here if needed
-             }
+             // Fallback to TTS
+             playTTS(text);
         };
 
         // Set start time if range provided
@@ -633,165 +636,10 @@ const App: React.FC = () => {
     }
 
     // 2. Fallback to TTS
-    if (language !== 'th') {
-        playTTS(text);
-    } else {
-        // For Thai, if no audio file, do not play TTS
-        setIsSpeaking(false);
-    }
-  }, [stopSpeaking, playTTS, scriptRanges, customAudioMap, currentSceneData.id, language]);
+    playTTS(text);
+  }, [stopSpeaking, playTTS, scriptRanges, currentSceneData.id, language, currentContent.script]);
 
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  
-  // Recording states
-  const [isRecording, setIsRecording] = useState(false);
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const [showVoiceStudio, setShowVoiceStudio] = useState(false);
-
-  const generateAIVoiceover = async (sceneId: number, text: string) => {
-    setIsSaving(true);
-    setSaveMessage("AI is speaking...");
-    
-    try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) throw new Error("Gemini API Key not found");
-      
-      const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Say clearly in ${language === 'th' ? 'Thai' : language === 'zh' ? 'Chinese' : 'English'}: ${text}` }] }],
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: language === 'th' ? 'Kore' : 'Zephyr' },
-            },
-          },
-        },
-      });
-
-      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (!base64Audio) throw new Error("Failed to generate AI audio");
-
-      // Convert base64 to File
-      const byteCharacters = atob(base64Audio);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'audio/wav' });
-      const file = new File([blob], `ai-voice-${sceneId}.wav`, { type: 'audio/wav' });
-
-      // Upload using existing logic
-      await uploadAudioFile(file, sceneId);
-      
-    } catch (err) {
-      console.error("AI Voice error:", err);
-      setErrorMessage(`AI Voice failed: ${err instanceof Error ? err.message : String(err)}`);
-      setTimeout(() => setErrorMessage(null), 5000);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const startRecording = async (sceneId?: number) => {
-    const targetSceneId = sceneId || currentSceneData.id;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      const chunks: Blob[] = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-
-      recorder.onstop = async () => {
-        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
-        const file = new File([audioBlob], `recording-${Date.now()}.webm`, { type: 'audio/webm' });
-        await uploadAudioFile(file, targetSceneId);
-        
-        // Stop all tracks to release microphone
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      setAudioChunks([]);
-      setMediaRecorder(recorder);
-      recorder.start();
-      setIsRecording(true);
-      setRecordingTime(0);
-      
-      timerRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
-      }, 1000);
-    } catch (err) {
-      console.error("Error accessing microphone:", err);
-      setErrorMessage("Could not access microphone. Please check permissions.");
-      setTimeout(() => setErrorMessage(null), 5000);
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorder && isRecording) {
-      mediaRecorder.stop();
-      setIsRecording(false);
-      if (timerRef.current) clearInterval(timerRef.current);
-    }
-  };
-
-  const uploadAudioFile = async (file: File, sceneId?: number) => {
-    const targetSceneId = sceneId || currentSceneData.id;
-    setIsSaving(true);
-    setSaveMessage("Uploading to Server...");
-    
-    try {
-      const formData = new FormData();
-      formData.append('audio', file);
-      formData.append('sceneId', targetSceneId.toString());
-
-      const response = await fetch('/api/audio/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to upload audio to server');
-      }
-
-      const data = await response.json();
-      const finalUrl = data.audioUrl;
-      
-      setCustomAudioMap(prev => ({
-        ...prev,
-        [targetSceneId]: finalUrl
-      }));
-      
-      setSaveMessage(ui.saveSuccess);
-      setTimeout(() => setSaveMessage(null), 3000);
-      
-      if (mode === 'STORY' && isAudioEnabled && targetSceneId === currentSceneData.id) {
-         speak(fullText, finalUrl, currentContent.audioRange);
-      }
-    } catch (error) {
-      console.error("Save error:", error);
-      setErrorMessage(`Failed to save audio: ${error instanceof Error ? error.message : String(error)}`);
-      setTimeout(() => setErrorMessage(null), 10000);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    await uploadAudioFile(file);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
 
   const toggleAudio = () => {
     if (!isAudioEnabled) {
@@ -882,9 +730,15 @@ const App: React.FC = () => {
     }, 500);
   };
 
+  // --- Preload TTS Voices ---
   useEffect(() => {
-    console.log("[App] customAudioMap updated:", customAudioMap);
-  }, [customAudioMap]);
+    if (window.speechSynthesis) {
+      window.speechSynthesis.getVoices();
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.getVoices();
+      };
+    }
+  }, []);
 
   // --- Global Audio Unlock for iOS ---
   useEffect(() => {
@@ -926,39 +780,6 @@ const App: React.FC = () => {
   }, []);
 
   // --- Auto-Play Logic ---
-  useEffect(() => {
-    const initAudioMap = async () => {
-      const staticMap: Record<number, string> = {};
-      SCENES.forEach(scene => {
-          if (scene.th.audio) {
-              staticMap[scene.id] = scene.th.audio;
-          }
-      });
-      
-      let localMap = {};
-      try {
-        localMap = await getAllAudioLocal();
-      } catch (error) {
-        console.warn("Failed to load local audio map", error);
-      }
-
-      let serverMap = {};
-      try {
-        const response = await fetch('/api/audio/map');
-        if (response.ok) {
-          serverMap = await response.json();
-        }
-      } catch (e) {
-        console.error("Error fetching global audio from server:", e);
-      }
-
-      setCustomAudioMap({ ...PRELOADED_AUDIO, ...staticMap, ...localMap, ...serverMap });
-      console.log("[App] Initialized audio map with static, local, and server data");
-    };
-    
-    initAudioMap();
-  }, []);
-
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     // IMPORTANT: Add !showTour check to prevent auto-play during tour
@@ -1184,87 +1005,6 @@ const App: React.FC = () => {
          />
       )}
 
-      {/* VOICE STUDIO MODAL */}
-      {showVoiceStudio && (
-        <div className="fixed inset-0 z-[300] bg-slate-900/95 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white rounded-sm shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden border-t-8 border-orange-500">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-               <div>
-                  <h2 className="text-xl font-bold text-slate-900 uppercase tracking-wide flex items-center gap-2">
-                    <Mic className="w-5 h-5 text-orange-600" /> {ui.voiceStudio}
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-1 font-medium">{ui.voiceStudioDesc}</p>
-               </div>
-               <div className="flex items-center gap-4">
-                 <button 
-                   onClick={() => {
-                     const code = `const PRELOADED_AUDIO: Record<number, string> = ${JSON.stringify(customAudioMap, null, 2)};`;
-                     navigator.clipboard.writeText(code);
-                     alert("Audio code copied to clipboard! Paste it into App.tsx to save it permanently in the code.");
-                   }}
-                   className="px-4 py-2 bg-slate-900 text-white rounded-sm text-xs font-bold uppercase tracking-wider hover:bg-slate-800 transition-colors flex items-center gap-2"
-                 >
-                   <Upload size={14} /> Save to Code
-                 </button>
-                 <button onClick={() => setShowVoiceStudio(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
-                    <X className="w-6 h-6 text-slate-400" />
-                 </button>
-               </div>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-               {SCENES.map((scene) => {
-                  const sceneContent = scene[language];
-                  const hasCustom = !!customAudioMap[scene.id];
-                  
-                  return (
-                    <div key={scene.id} className={`p-4 border rounded-sm transition-all ${hasCustom ? 'border-emerald-200 bg-emerald-50/30' : 'border-slate-200 bg-white'}`}>
-                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                          <div className="flex-1">
-                             <div className="flex items-center gap-2 mb-1">
-                                <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-900 text-white rounded-sm uppercase">{ui.scene} {scene.id}</span>
-                                {hasCustom && <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-600 text-white rounded-sm uppercase flex items-center gap-1"><CheckCircle size={10} /> {ui.savedStatus}</span>}
-                             </div>
-                             <h3 className="font-bold text-slate-800 text-sm">{sceneContent.title}</h3>
-                             <p className="text-xs text-slate-500 italic mt-1 line-clamp-2">{sceneContent.script.join(' ')}</p>
-                          </div>
-                          
-                          <div className="flex items-center gap-2">
-                             {hasCustom && (
-                                <button 
-                                  onClick={async () => {
-                                    try {
-                                      await fetch(`/api/audio/map/${scene.id}`, { method: 'DELETE' });
-                                    } catch (e) {
-                                      console.error("Failed to delete from server", e);
-                                    }
-                                    await deleteAudioLocal(scene.id);
-                                    setCustomAudioMap(prev => {
-                                      const next = {...prev};
-                                      delete next[scene.id];
-                                      return next;
-                                    });
-                                  }}
-                                  className="p-2 text-slate-400 hover:text-red-600 transition-colors"
-                                  title={ui.removeAudio}
-                                >
-                                  <RotateCcw size={14} />
-                                </button>
-                             )}
-                          </div>
-                       </div>
-                    </div>
-                  );
-               })}
-            </div>
-            
-            <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
-               <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">All recordings are saved permanently to your cloud database</p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* TEAM MEMBER MODAL */}
       {showTeamModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/95 backdrop-blur-md flex items-center justify-center p-4">
@@ -1276,11 +1016,11 @@ const App: React.FC = () => {
              <div className="space-y-4 text-left">
                 <div className="p-4 bg-slate-50 border-l-4 border-orange-500 shadow-sm">
                    <p className="font-bold text-lg text-slate-800">1. นายนพกร ปิยะบุตร</p>
-                   <p className="text-slate-600 font-mono text-sm mt-1">66543303029-3 <span className="text-orange-600 font-bold ml-2">(พากย์เสียง)</span></p>
+                   <p className="text-slate-600 font-mono text-sm mt-1">66543303029-3 <span className="text-orange-600 font-bold ml-2">(เนื้อเรื่อง บทพูด)</span></p>
                 </div>
                 <div className="p-4 bg-slate-50 border-l-4 border-orange-500 shadow-sm">
                    <p className="font-bold text-lg text-slate-800">2. นายกิตติธัช ใหม่ดี</p>
-                   <p className="text-slate-600 font-mono text-sm mt-1">66543303042-6 <span className="text-orange-600 font-bold ml-2">(พากย์เสียง)</span></p>
+                   <p className="text-slate-600 font-mono text-sm mt-1">66543303042-6 <span className="text-orange-600 font-bold ml-2">(ซับกำกับ)</span></p>
                 </div>
                 <div className="p-4 bg-slate-50 border-l-4 border-orange-500 shadow-sm">
                    <p className="font-bold text-lg text-slate-800">3. นายพงศ์ภวัน ศรีสวัสดิ์</p>
@@ -1436,54 +1176,8 @@ const App: React.FC = () => {
                  <button id="btn-language" onClick={() => setShowLanguageModal(true)} className="p-2 rounded-sm border border-slate-300 bg-white text-slate-600 hover:border-orange-500 hover:text-orange-600 shadow-sm"><Globe className="w-4 h-4" /></button>
                  <button onClick={togglePlay} className={`p-2 rounded-sm border shadow-sm ${isPlaying ? 'bg-orange-600 text-white border-orange-700' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}>{isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}</button>
                  <button onClick={toggleAudio} className={`p-2 rounded-sm border shadow-sm ${isAudioEnabled ? 'bg-slate-800 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}>{isAudioEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}</button>
-                 <button 
-                    onClick={() => setShowVoiceStudio(true)}
-                    className="p-2 rounded-sm border border-slate-300 bg-white text-slate-600 hover:border-orange-500 hover:text-orange-600 shadow-sm"
-                    title={ui.voiceStudio}
-                  >
-                    <Settings className="w-4 h-4" />
-                  </button>
-                 <button 
-                    onClick={() => fileInputRef.current?.click()} 
-                    className={`p-2 rounded-sm border shadow-sm ${
-                        customAudioMap[currentSceneData.id] 
-                                ? 'bg-green-600 text-white border-green-700' 
-                                : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'
-                    }`} 
-                    title="Upload Custom Audio"
-                 >
-                   <Upload className="w-4 h-4" />
-                 </button>
-                 <button 
-                   onClick={() => {
-                     const code = `const PRELOADED_AUDIO: Record<number, string> = ${JSON.stringify(customAudioMap, null, 2)};`;
-                     navigator.clipboard.writeText(code);
-                     alert("Audio code copied to clipboard! Paste it into App.tsx (replace the PRELOADED_AUDIO constant) to save it permanently in the code.");
-                   }}
-                   className="p-2 rounded-sm border border-slate-300 bg-slate-900 text-white hover:bg-slate-800 shadow-sm"
-                   title="Copy Audio Code for App.tsx"
-                 >
-                   <Code className="w-4 h-4" />
-                 </button>
-                 <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="audio/*" className="hidden" />
               </div>
               
-              <AnimatePresence>
-                {/* Error message removed */}
-                {saveMessage && (
-                    <motion.div 
-                        key="save-msg"
-                        initial={{ opacity: 0, y: -20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0 }}
-                        className={`fixed top-20 right-6 text-white px-4 py-2 rounded shadow-lg z-[200] flex items-center gap-2 font-bold text-sm ${isSaving ? 'bg-blue-600' : 'bg-green-600'}`}
-                    >
-                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                        {saveMessage}
-                    </motion.div>
-                )}
-              </AnimatePresence>
-
               <div className="mb-6">
                 <div className="flex items-center gap-2 text-orange-600 font-bold uppercase tracking-widest text-xs mb-2 font-mono">
                   <span>{ui.scene} {currentSceneData.id} / {totalScenes}</span>

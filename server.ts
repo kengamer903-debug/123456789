@@ -3,8 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import multer from 'multer';
-import { GoogleGenAI, Modality } from "@google/genai";
-import { SCENES } from './data.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,50 +42,6 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage })
 
 // API endpoints
-app.get('/api/generate-all-audio', async (req, res) => {
-  try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const preloaded: Record<number, string> = {};
-    const errors: any[] = [];
-    
-    for (const scene of SCENES) {
-      console.log(`Generating audio for scene ${scene.id}...`);
-      const text = scene.th.script.join(" ");
-      try {
-        const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash-preview-tts",
-          contents: [{ parts: [{ text: text }] }],
-          config: {
-            responseModalities: ["AUDIO"],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: 'Kore' },
-              },
-            },
-          },
-        });
-        
-        const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-        if (base64Audio) {
-          preloaded[scene.id] = `data:audio/wav;base64,${base64Audio}`;
-          console.log(`Scene ${scene.id} generated successfully.`);
-        } else {
-          errors.push({ scene: scene.id, error: "No audio data returned" });
-        }
-      } catch (e: any) {
-        console.error(`Error generating scene ${scene.id}:`, e);
-        errors.push({ scene: scene.id, error: e.message || String(e) });
-      }
-    }
-    
-    fs.writeFileSync(path.join(__dirname, 'generated_audio.json'), JSON.stringify(preloaded, null, 2));
-    res.json({ success: true, message: "Generated audio saved to generated_audio.json", errors });
-  } catch (e: any) {
-    console.error(e);
-    res.status(500).json({ error: e.message });
-  }
-});
-
 app.get('/api/audio/map', (req, res) => {
   try {
     const data = fs.readFileSync(audioMapFile, 'utf8');

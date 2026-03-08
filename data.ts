@@ -19,8 +19,7 @@ export const SCENES: SceneData[] = [
         "ดินที่มันหลวมๆ เนี่ย มันก็ไม่ต่างอะไรจากฟองน้ำเลยครับ",
         "คือมันอาจจะรับน้ำหนักได้ในช่วงแรกๆ นะ แต่ไม่นานทุกอย่างก็ต้องค่อยๆ ทรุดตัวลงมา",
         "นี่แหละครับคือตัวการสำคัญที่ซ่อนอยู่ใต้ดิน"
-      ],
-      audio: "https://drive.google.com/uc?export=download&id=1PAW27ULvbUDb7d3oRNc70qD9rIhcc1fr"
+      ]
     },
     en: {
       title: "The Invisible Problem",
